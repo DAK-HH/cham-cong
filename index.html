@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a4f44">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Chấm công">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Chấm công & tính lương</title>
+<style>
+  :root{
+    --bg:#e9efee; --surface:#ffffff; --ink:#13232b; --muted:#5d6f77; --line:#d3dedc;
+    --teal:#0e6b5c; --teal-d:#0a4f44; --teal-l:#d9efe9;
+    --amber:#a8520a; --amber-l:#fde9c9;
+    --blue:#2f5b9a; --blue-l:#dfe9f7;
+    --rose:#9b2c3d; --rose-l:#f8dfe3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;font-size:15px;line-height:1.45}
+  .wrap{max-width:860px;margin:0 auto;padding:14px 14px 60px}
+  h1{font-size:20px;margin:0}
+  button,input,select{font:inherit;color:inherit}
+  button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #f2b705;outline-offset:1px}
+
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 12px}
+  .month{display:flex;align-items:center;gap:6px}
+  .month button{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:18px}
+  .month b{min-width:112px;text-align:center;font-size:16px}
+
+  /* Total */
+  .total{background:var(--teal-d);color:#fff;border-radius:18px 18px 6px 18px;padding:18px 18px 14px}
+  .total small{opacity:.8}
+  .total .big{font-size:38px;font-weight:700;letter-spacing:-.5px;line-height:1.1;margin:2px 0 12px;font-variant-numeric:tabular-nums}
+  .split{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 14px}
+  @media(min-width:560px){.split{grid-template-columns:repeat(4,1fr)}}
+  .split div{border-top:1px solid rgba(255,255,255,.25);padding-top:6px}
+  .split span{display:block;font-size:12.5px;opacity:.8}
+  .split strong{font-size:16px;font-variant-numeric:tabular-nums}
+  .stats{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-size:13.5px;opacity:.92}
+
+  /* Today */
+  .today{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:6px 16px 16px 16px;padding:12px 14px;margin:12px 0}
+  .clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;min-width:112px}
+  .today .info{flex:1;min-width:130px;color:var(--muted);font-size:13.5px}
+  .today .btns{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{padding:11px 14px}
+  .btn{border:0;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;background:var(--teal);color:#fff}
+  .btn.alt{background:var(--amber)}
+  .btn.ghost{background:transparent;color:var(--teal-d);border:1px solid var(--line)}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  /* Days */
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:14px 2px 6px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  .day{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"date type type" "in in2 out" "calc calc calc";gap:6px 8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px}
+  .day .d-calc{text-align:left}
+  @media(min-width:640px){.day{grid-template-columns:70px 128px 96px 96px 96px 1fr;grid-template-areas:"date type in in2 out calc"}.day .d-calc{text-align:right}}
+  .day.off{border-left-color:var(--blue);background:#f6f9fe}
+  .day.holiday{border-left-color:var(--rose);background:#fdf6f7}
+  .day.has{border-left-color:var(--teal)}
+  .day.off.has{border-left-color:var(--blue)}
+  .day.holiday.has{border-left-color:var(--rose)}
+  .day.today-row{box-shadow:0 0 0 2px #f2b705}
+  .d-date{grid-area:date;line-height:1.2}
+  .d-date b{font-size:16px}.d-date span{display:block;font-size:12px;color:var(--muted)}
+  .d-type{grid-area:type}
+  .tinp{text-align:center;font-variant-numeric:tabular-nums;font-size:16px}
+  .d-in{grid-area:in}.d-in2{grid-area:in2}.d-out{grid-area:out}
+  .d-calc{grid-area:calc;text-align:right;font-size:13px;color:var(--muted);line-height:1.3}
+  .d-calc b{display:block;font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .ot{color:var(--amber);font-weight:600}
+  .late-t{color:var(--rose);font-weight:600}
+  .day select,.day input{width:100%;min-height:36px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:4px 8px}
+  .lbl{font-size:11.5px;color:var(--muted);display:block}
+  .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:12px;text-decoration:underline;padding:2px 0}
+
+  /* Lịch rút gọn */
+  .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 8px;margin:12px 0}
+  .cal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .cal-h{font-size:11.5px;color:var(--muted);text-align:center;padding-bottom:2px}
+  .c{border:1px solid var(--line);background:#fff;border-radius:8px;min-height:46px;padding:3px 1px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;font-weight:600;line-height:1.1;position:relative}
+  .c small{font-size:10px;font-weight:500;margin-top:2px}
+  .c.blank{border:0;background:none;cursor:default}
+  .c.full{background:var(--teal);border-color:var(--teal);color:#fff}
+  .c.half{background:var(--teal-l);border:2px solid var(--teal);color:var(--teal-d)}
+  .c.leave{background:var(--rose-l);border-color:#e6b5bd;color:var(--rose)}
+  .c.rest{background:#eef1f4;color:var(--muted)}
+  .c.hol{background:#fdf6f7;border-color:#e6b5bd;color:var(--rose)}
+  .c.warn{border:2px dashed var(--amber);color:var(--amber)}
+  .c.ot::after{content:"";position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:#f2b705}
+  .c.late::before{content:"";position:absolute;top:4px;left:4px;width:7px;height:7px;border-radius:50%;background:#d6384f}
+  .c.now{box-shadow:0 0 0 2px #f2b705}
+  .cal-sum{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin:8px 2px 2px}
+  .cal-sum span{color:var(--muted)}
+  .cal-sum b{color:var(--ink)}
+  .day.flash{outline:3px solid #f2b705}
+  #daylist>summary{font-weight:600}
+
+  /* Settings */
+  details{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-top:16px}
+  summary{padding:13px 14px;font-weight:600;cursor:pointer}
+  .set{padding:2px 14px 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 12px}
+  .grid label{display:block;font-size:12.5px;color:var(--muted)}
+  .grid input,.grid select,.al input,.al select{width:100%;min-height:38px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;background:#fff}
+  .set h3{font-size:14px;margin:16px 0 8px}
+  .days-off{display:flex;gap:6px;flex-wrap:wrap}
+  .days-off label{border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;color:var(--ink)}
+  .days-off input{width:auto;min-height:0;margin-right:4px}
+  .al{display:grid;grid-template-columns:1fr 110px 130px 34px;gap:6px;margin-bottom:6px}
+  .al button{border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer}
+  .hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+  .foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .savewarn{background:var(--amber-l);color:#6b3406;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:13.5px}
+  .savewarn[hidden]{display:none}
+  #bk{width:100%;min-height:76px;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
+  .toast.on{opacity:1}
+  @media(prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>Chấm công</h1>
+    <div class="month">
+      <button id="prev" aria-label="Tháng trước">‹</button>
+      <b id="mlabel"></b>
+      <button id="next" aria-label="Tháng sau">›</button>
+    </div>
+  </div>
+  <div id="app"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const WD = ['CN','T2','T3','T4','T5','T6','T7'];
+const KEY = 'chamcong-v1';
+const DEFAULTS = {
+  payMode: 'month',        // 'month' | 'hour'
+  salary: 11030000,        // lương cơ bản / tháng của chức danh đang chọn
+  salaries: { nvsx: 11030000 },  // lương cơ bản theo từng chức danh
+  hourRate: 35000,         // lương giờ
+  stdHours: 8, halfHours: 4,
+  stdMonth: {},            // công chuẩn nhập tay theo tháng, ví dụ {'2026-10': 24}; trống = tự đếm
+  lunchStart: '12:00',     // giờ bắt đầu nghỉ trưa (buổi sáng tính đến mốc này)
+  lunchEnd: '13:30',       // hết nghỉ trưa: buổi chiều tính từ mốc này
+  graceUntil: '14:00',     // được chấm "Vào chiều" đến giờ này; sau mốc này là trễ
+  shiftStart: '08:00',     // giờ vào ca: đi sớm hơn không tính thêm
+  shiftEnd: '17:30',       // hết ca: sau mốc này mới là tăng ca (chỉ nhân viên xưởng)
+  // Quy định đi muộn: mới áp dụng, có thể thay đổi nên để riêng và mặc định tắt
+  lateMode: 'off',         // 'off' = bỏ qua | 'notice' = chỉ thông báo | 'apply' = áp dụng các quy định bên dưới
+  lateMin: 10,             // vào sáng muộn quá số phút này là đi muộn
+  lateRule1: false, lateScope: 'session',   // đi muộn thì buổi đó ('session') hoặc cả ngày ('day') tính nghỉ không lương
+  lateRule2: false, lateN: 3, lateFine: 100000,   // đi muộn đủ N ngày trong tháng thì phạt (mỗi N ngày phạt một lần)
+  otNormal: 150, otOff: 200, holidayPaid: 1,          // nghỉ lễ không đi làm: 1 = vẫn hưởng lương 1 ngày
+  holidayAllow: 0,         // nghỉ lễ không đi làm: 1 = vẫn tính phụ cấp (0 = không, bị trừ như ngày nghỉ)
+  otHoliday: 200, otHalf: 200,   // otHalf: giờ chiều của ngày làm nửa ngày (thứ Bảy)
+  offDays: [0],            // ngày nghỉ hằng tuần
+  halfDays: [6],           // ngày làm nửa ngày: sáng là giờ thường, chiều tính tăng ca
+  position: 'nvsx', factory: true,   // mặc định: nhân viên sản xuất/kho, làm tại xưởng
+  allowances: []
+};
+// Bảng phụ cấp theo chức danh (VNĐ/tháng)
+const LUNCH = 600000, FUEL = 1200000;
+const POSITIONS = [
+  { id: 'gd', name: 'Giám đốc', resp: 2800000 },
+  { id: 'pgd', name: 'Phó giám đốc', resp: 2700000 },
+  { id: 'tp', name: 'Trưởng phòng / Kế toán trưởng', resp: 2500000 },
+  { id: 'nvkd', name: 'Nhân viên kinh doanh', resp: 2000000 },
+  { id: 'nvkt', name: 'Nhân viên kế toán / HCNS', resp: 1000000 },
+  { id: 'nvsx', name: 'Nhân viên sản xuất / kho', resp: 1300000 },
+  { id: 'nvmh', name: 'Nhân viên mua hàng', resp: 500000 },
+  { id: 'nvmk', name: 'Nhân viên marketing', resp: 500000 }
+];
+function applyPosition() {
+  const S = state.s;
+  // bỏ các khoản tự điền cũ và khoản "Ăn trưa" mặc định của bản đầu, giữ các khoản bạn tự thêm
+  S.allowances = S.allowances.filter(a => !String(a.id).startsWith('auto-') && a.id !== 1);
+  const auto = [], p = POSITIONS.find(x => x.id === S.position);
+  if (p) {
+    auto.push({ id: 'auto-resp', name: 'Phụ cấp trách nhiệm', amount: p.resp, mode: 'month' });
+    auto.push({ id: 'auto-lunch', name: 'Tiền ăn trưa', amount: LUNCH, mode: 'month' });
+  }
+  if (S.factory) auto.push({ id: 'auto-fuel', name: 'Phụ cấp xăng xe', amount: FUEL, mode: 'month' });
+  S.allowances = [...auto, ...S.allowances];
+}
+let state = { v: 2, s: structuredClone(DEFAULTS), days: {} };
+applyPosition();
+let view = new Date(); view.setDate(1);
+let settingsOpen = false, daysOpen = false, pending = false, armedDel = null;
+
+/* ---------- lưu trữ ---------- */
+// Thứ tự thử: bộ nhớ của artifact -> bộ nhớ trình duyệt -> không lưu được (khi đó dùng Sao lưu trong Cài đặt)
+let storageMode = 'unknown', cloudBad = false;
+function adopt(raw) {
+  const o = JSON.parse(raw);
+  if (!o || typeof o !== 'object' || !o.s) throw new Error('bad');
+  state = { v: 2, s: structuredClone({ ...DEFAULTS, ...o.s }), days: o.days || {} };
+  if (!o.v) { // dữ liệu từ bản cũ: chuyển sang lương và phụ cấp mặc định mới
+    if (state.s.salary === 8000000) state.s.salary = 11030000;
+    if (!o.s.position && !o.s.factory) { state.s.position = 'nvsx'; state.s.factory = true; applyPosition(); }
+  }
+  if (!o.s.salaries) { state.s.salaries = {}; if (state.s.position) state.s.salaries[state.s.position] = state.s.salary; }
+  if (state.s.otHoliday === 300) state.s.otHoliday = 200; // công ty tính lễ ×200%
+  if (o.s.holidayAllow === undefined) { state.s.holidayPaid = 1; state.s.holidayAllow = 0; } // nghỉ lễ: có lương, không phụ cấp
+}
+async function load() {
+  let raw = null;
+  try { if (window.storage) { const r = await window.storage.get(KEY); raw = r && r.value; if (raw) storageMode = 'cloud'; } } catch (e) { /* chưa có dữ liệu hoặc không dùng được */ }
+  if (!raw) { try { raw = window.localStorage.getItem(KEY); if (raw) storageMode = 'local'; } catch (e) { /* bị chặn */ } }
+  if (raw) { try { adopt(raw); } catch (e) { /* dữ liệu hỏng thì bỏ qua */ } }
+}
+async function save() {
+  const raw = JSON.stringify(state);
+  if (window.storage && !cloudBad) {
+    try { await window.storage.set(KEY, raw); storageMode = 'cloud'; updateStatus(); return; } catch (e) { cloudBad = true; }
+  }
+  try { window.localStorage.setItem(KEY, raw); storageMode = 'local'; } catch (e) { storageMode = 'none'; }
+  updateStatus();
+}
+function updateStatus() {
+  const el = document.getElementById('savewarn');
+  if (el) el.hidden = storageMode !== 'none';
+}
+async function backupCopy() {
+  const ta = document.getElementById('bk');
+  ta.value = JSON.stringify(state); ta.focus(); ta.select();
+  try { await navigator.clipboard.writeText(ta.value); toast('Đã sao chép dữ liệu'); }
+  catch (e) { try { document.execCommand('copy'); toast('Đã sao chép dữ liệu'); } catch (e2) { toast('Bấm giữ vào ô rồi chọn Sao chép'); } }
+}
+function backupRestore() {
+  const ta = document.getElementById('bk');
+  try { adopt(ta.value.trim()); save(); settingsOpen = true; render(); toast('Đã khôi phục dữ liệu'); }
+  catch (e) { toast('Nội dung chưa đúng, hãy dán lại dữ liệu đã sao chép'); }
+}
+
+/* ---------- tiện ích ---------- */
+const pad = n => String(n).padStart(2, '0');
+const keyOf = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+// Đọc giờ gõ bằng số: "830" -> 08:30, "0830" -> 08:30, "17" -> 17:00. Trả về '' nếu trống, null nếu sai
+function parseTime(str) {
+  const d = String(str).replace(/\D/g, '');
+  if (!d) return '';
+  let h, m;
+  if (d.length <= 2) { h = +d; m = 0; }
+  else if (d.length === 3) { h = +d[0]; m = +d.slice(1); }
+  else if (d.length === 4) { h = +d.slice(0, 2); m = +d.slice(2); }
+  else return null;
+  if (h > 23 || m > 59) return null;
+  return `${pad(h)}:${pad(m)}`;
+}
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const fmtH = m => `${Math.floor(m / 60)}h${pad(Math.round(m % 60))}`;
+const money = n => Math.round(n).toLocaleString('vi-VN') + ' ₫';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hourly = (y, m) => state.s.payMode === 'hour'
+  ? state.s.hourRate
+  : state.s.salary / (stdOf(y, m) * state.s.stdHours);
+// công chuẩn của tháng: số ngày thường + 0,5 công cho mỗi ngày làm nửa ngày (thứ Bảy); có thể nhập tay
+function stdOf(y, m) {
+  const o = Number(state.s.stdMonth && state.s.stdMonth[`${y}-${pad(m + 1)}`]);
+  if (o > 0) return o;
+  let c = 0;
+  for (let d = 1, n = new Date(y, m + 1, 0).getDate(); d <= n; d++) { const t = defType(y, m, d); c += t === 'normal' ? 1 : t === 'half' ? 0.5 : 0; }
+  return c;
+}
+function defType(y, m, d) {
+  const w = new Date(y, m, d).getDay();
+  return state.s.offDays.includes(w) ? 'off' : (state.s.halfDays || []).includes(w) ? 'half' : 'normal';
+}
+function toast(msg, ms) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), ms || 1600); }
+
+/* ---------- tính toán một ngày ---------- */
+function overlap(a1, a2, b1, b2) { return Math.max(0, Math.min(a2, b2) - Math.max(a1, b1)); }
+// đi muộn: vào sáng muộn quá lateMin phút so với giờ vào ca, hoặc vào chiều sau mốc cho phép (14:00)
+function lateInfo(y, m, d) {
+  const S = state.s;
+  if (S.lateMode === 'off') return null;
+  const rec = state.days[keyOf(y, m, d)];
+  if (!rec) return null;
+  const type = rec.type || defType(y, m, d);
+  let lm = 0, la = false;
+  if ((type === 'normal' || type === 'half') && rec.in) { const diff = toMin(rec.in) - toMin(S.shiftStart); if (diff > S.lateMin) lm = diff; }
+  if (type === 'normal' && rec.in2 && toMin(rec.in2) > toMin(S.graceUntil)) la = true;
+  return (lm || la) ? { m: lm, a: la } : null;
+}
+function calcDay(y, m, d) {
+  const rec = state.days[keyOf(y, m, d)];
+  if (!rec) return null;
+  const S = state.s, rate = hourly(y, m);
+  const type = rec.type || defType(y, m, d);
+  const extra = Number(rec.extra) || 0;
+  const base = { type, worked: 0, reg: 0, ot: 0, regPay: 0, otPay: 0, allow: 0, extra, total: 0, partial: true };
+  // ngày lễ không có giờ tính: nghỉ lễ hưởng lương nếu công ty cho
+  const holidayRes = () => {
+    const paid = type === 'holiday' && !!S.holidayPaid;
+    const pay = paid ? S.stdHours * rate : 0;
+    return { ...base, regPay: pay, total: pay, holidayPaid: paid, holidayNoWork: type === 'holiday' };
+  };
+  if ((!rec.in && !rec.in2) || !rec.out) {
+    const noTimes = !rec.in && !rec.in2 && !rec.out;
+    return noTimes ? { ...holidayRes(), noTimes: true } : { ...base, noTimes: false };
+  }
+  const otOn = !!S.factory;   // chỉ nhân viên xưởng được tính tăng ca
+  const L = toMin(S.lunchStart), R = toMin(S.lunchEnd), G = toMin(S.graceUntil), S0 = toMin(S.shiftStart), E = toMin(S.shiftEnd);
+  const a = rec.in ? toMin(rec.in) : null, c0 = rec.in2 ? toMin(rec.in2) : null, b = toMin(rec.out);
+  // giờ gõ nhầm (vào chiều sớm hơn vào sáng, tan ca trước giờ vào, hoặc dài quá 16 giờ): không tính tiền, báo kiểm tra lại
+  if ((a !== null && c0 !== null && c0 <= a) || (c0 !== null && b <= c0) || (c0 === null && b <= a) || (b - (a !== null ? a : c0) > 16 * 60)) {
+    return { ...base, suspect: true };
+  }
+  const clock = type === 'normal' || type === 'half';
+  const li = lateInfo(y, m, d);
+  const lateM = li ? li.m : 0, lateA = !!(li && li.a);
+  // Buổi sáng: từ giờ vào đến giờ nghỉ trưa (ngày thường và thứ Bảy: đi sớm hơn giờ vào ca không tính thêm).
+  // Buổi chiều: vào chiều trước mốc cho phép thì tính từ giờ hết nghỉ trưa, sau mốc đó tính giờ thực tế.
+  // Ngày không chấm "Vào chiều": coi như quay lại đúng giờ sau nghỉ trưa.
+  let morning = null, afternoon = null;
+  if (a !== null) { const st = clock ? Math.max(a, S0) : a; morning = [st, Math.max(st, Math.min(b, L))]; }
+  if (c0 !== null) afternoon = [(type === 'normal' && c0 > G) ? c0 : Math.max(c0, R), b];
+  else if (a !== null && b > R) afternoon = [Math.max(R, morning[0]), b];
+  // nhân viên không tính tăng ca: cắt phần sau giờ hết ca; làm ngày nghỉ tuần/ngày lễ/chiều thứ Bảy không tính
+  if (!otOn) {
+    if (type === 'off' || type === 'holiday') return { ...holidayRes(), noOt: true };
+    if (type === 'half') afternoon = null;
+    else if (afternoon) afternoon = [afternoon[0], Math.min(afternoon[1], E)];
+  }
+  // quy định đi muộn (nếu bật): buổi muộn hoặc cả ngày tính nghỉ không lương
+  let dropped = null;
+  if (S.lateMode === 'apply' && S.lateRule1 && li) {
+    if (S.lateScope === 'day') return { ...base, unpaid: true, late: true, lateM, lateA, dropped: 'cả ngày' };
+    if (lateM) { morning = null; dropped = 'sáng'; }
+    if (lateA) { afternoon = null; dropped = dropped ? 'cả ngày' : 'chiều'; }
+  }
+  const len = sg => sg ? Math.max(0, sg[1] - sg[0]) : 0;
+  const mLen = len(morning), worked = mLen + len(afternoon);
+  if (worked === 0 && dropped) return { ...base, unpaid: true, late: true, lateM, lateA, dropped };
+  let reg = 0, ot = 0, regPay = 0, otPay = 0;
+  if (type === 'half') {
+    // làm nửa ngày (thứ Bảy): buổi sáng là giờ thường, buổi chiều là tăng ca
+    reg = Math.min(mLen, S.halfHours * 60); ot = worked - reg;
+    regPay = reg / 60 * rate; otPay = ot / 60 * rate * S.otHalf / 100;
+  } else if (type === 'normal') {
+    // tăng ca chỉ tính sau giờ hết ca (17:30)
+    const afterEnd = afternoon ? overlap(afternoon[0], afternoon[1], E, 3000) : 0;
+    reg = Math.min(worked - afterEnd, S.stdHours * 60); ot = worked - reg;
+    regPay = reg / 60 * rate; otPay = ot / 60 * rate * S.otNormal / 100;
+  } else {
+    ot = worked;
+    otPay = worked / 60 * rate * (type === 'off' ? S.otOff : S.otHoliday) / 100;
+  }
+  const allow = worked > 0 ? S.allowances.filter(x => x.mode === 'day').reduce((sum, x) => sum + Number(x.amount || 0), 0) : 0;
+  return { type, worked, reg, ot, regPay, otPay, allow, extra, late: !!li, lateM, lateA, dropped, total: regPay + otPay + allow + extra };
+}
+
+function calcMonth() {
+  const y = view.getFullYear(), m = view.getMonth(), n = new Date(y, m + 1, 0).getDate();
+  const t = { regPay: 0, otPay: 0, allow: 0, extra: 0, regMin: 0, otMin: 0, workDays: 0, cong: 0, holidayDays: 0, lateDays: [], penalty: 0 };
+  for (let d = 1; d <= n; d++) {
+    const r = calcDay(y, m, d);
+    const li = lateInfo(y, m, d); if (li) t.lateDays.push({ d, li });
+    if (r && r.holidayNoWork && (state.s.holidayPaid || state.s.holidayAllow)) {
+      // nghỉ lễ: lương và phụ cấp tính riêng. Công dùng để tính phụ cấp chỉ cộng khi công ty cho tính phụ cấp ngày lễ
+      if (state.s.holidayAllow) t.cong += 1;
+      if (state.s.holidayPaid) t.regPay += r.regPay;
+      t.holidayDays++; continue;
+    }
+    if (!r || r.worked === 0) { if (r) t.extra += r.extra; continue; }
+    t.workDays++;
+    // ngày công: đủ ≥ 75% giờ chuẩn = 1 công, ít hơn = 0,5 công; làm ngày nghỉ tuần là tăng ca, không tính công
+    if (r.type === 'half') t.cong += r.reg > 0 ? 0.5 : 0;   // thứ Bảy: làm buổi sáng = 0,5 công, buổi chiều là tăng ca
+    else if (r.type === 'normal') t.cong += r.reg >= 0.75 * state.s.stdHours * 60 ? 1 : 0.5;
+    else if (r.type === 'holiday') t.cong += r.worked >= 0.75 * state.s.stdHours * 60 ? 1 : 0.5;
+    t.regMin += r.reg; t.otMin += r.ot;
+    t.regPay += r.regPay; t.otPay += r.otPay; t.allow += r.allow; t.extra += r.extra;
+  }
+  // phụ cấp tháng: trừ theo ngày nghỉ (kể cả nghỉ phép) = phụ cấp × ngày công thực tế / ngày công chuẩn
+  t.std = stdOf(y, m);
+  t.ratio = Math.min(1, t.cong / t.std);
+  t.monthAllow = state.s.allowances.filter(x => x.mode === 'month').reduce((s, x) => s + Number(x.amount || 0), 0) * t.ratio;
+  t.allow += t.monthAllow;
+  const S2 = state.s;
+  if (S2.lateMode === 'apply' && S2.lateRule2 && S2.lateN > 0) t.penalty = Math.floor(t.lateDays.length / S2.lateN) * S2.lateFine;
+  t.total = t.regPay + t.otPay + t.allow + t.extra - t.penalty;
+  return t;
+}
+
+/* ---------- giao diện ---------- */
+function render() {
+  const y = view.getFullYear(), m = view.getMonth(), n = new Date(y, m + 1, 0).getDate();
+  const now = new Date(), todayKey = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
+  const T = calcMonth(), S = state.s;
+  document.getElementById('mlabel').textContent = `Tháng ${m + 1}/${y}`;
+  const tr = state.days[todayKey] || {};
+
+  let rows = '';
+  for (let d = 1; d <= n; d++) {
+    const k = keyOf(y, m, d), rec = state.days[k] || {};
+    const r = calcDay(y, m, d);
+    const type = rec.type || defType(y, m, d);
+    const dow = new Date(y, m, d).getDay();
+    const cls = ['day', type === 'off' ? 'off' : '', type === 'holiday' ? 'holiday' : '', r && r.worked ? 'has' : '', k === todayKey ? 'today-row' : ''].join(' ');
+    let calc = '<span class="lbl">Chưa có giờ</span>';
+    if (r && r.worked > 0) {
+      calc = `<b>${money(r.total)}</b>${fmtH(r.worked)}${r.ot ? ` · <span class="ot">TC ${fmtH(r.ot)}</span>` : ''}${r.late ? ` · <span class="late-t">${r.lateM ? 'Muộn ' + r.lateM + ' phút' : ''}${r.lateM && r.lateA ? ', ' : ''}${r.lateA ? 'Vào chiều trễ' : ''}${r.dropped ? ' · không tính lương buổi ' + r.dropped : ''}</span>` : ''}`
+        + `<br><button class="x" data-clear="${k}">Xóa ngày này</button>`;
+    } else if (r && r.suspect) {
+      calc = `<span class="late-t">Kiểm tra lại giờ</span><br><button class="x" data-clear="${k}">Xóa ngày này</button>`;
+    } else if (r && r.unpaid) {
+      calc = `<span class="late-t">Đi muộn${r.lateM ? ' ' + r.lateM + ' phút' : ''}${r.lateA ? ', vào chiều trễ' : ''}: tính nghỉ không lương ${r.dropped}</span><br><button class="x" data-clear="${k}">Xóa ngày này</button>`;
+    } else if (r && r.holidayPaid) {
+      calc = `<b>${money(r.total)}</b>Nghỉ lễ hưởng lương<br><button class="x" data-clear="${k}">Xóa</button>`;
+    } else if (r && r.noOt) {
+      calc = `<span class="lbl">Không tính tăng ca (không phải nhân viên xưởng)</span><button class="x" data-clear="${k}">Xóa ngày này</button>`;
+    } else if (r && r.noTimes) {
+      calc = `<span class="lbl">Chưa có giờ</span><button class="x" data-clear="${k}">Xóa</button>`;
+    } else if (r) {
+      calc = `<span class="lbl">Cần có giờ vào và tan ca</span><button class="x" data-clear="${k}">Xóa</button>`;
+    }
+    rows += `<div class="${cls}" id="row-${k}">
+      <div class="d-date"><b>${pad(d)}/${pad(m + 1)}</b><span>${WD[dow]}</span></div>
+      <div class="d-type"><select data-k="${k}" data-f="type" aria-label="Loại ngày ${d}">
+        <option value="" ${!rec.type ? 'selected' : ''}>${type === 'off' ? 'Nghỉ tuần (tự động)' : type === 'half' ? 'Nửa ngày (tự động)' : 'Ngày thường (tự động)'}</option>
+        <option value="normal" ${rec.type === 'normal' ? 'selected' : ''}>Ngày thường</option>
+        <option value="half" ${rec.type === 'half' ? 'selected' : ''}>Làm nửa ngày (sáng thường, chiều TC)</option>
+        <option value="off" ${rec.type === 'off' ? 'selected' : ''}>Ngày nghỉ tuần</option>
+        <option value="holiday" ${rec.type === 'holiday' ? 'selected' : ''}>Ngày lễ</option></select></div>
+      <div class="d-in"><span class="lbl">Vào sáng</span><input class="tinp" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="--:--" aria-label="Vào sáng ngày ${d}" data-k="${k}" data-f="in" value="${rec.in || ''}"></div>
+      <div class="d-in2"><span class="lbl">Vào chiều</span><input class="tinp" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="--:--" aria-label="Vào chiều ngày ${d}" data-k="${k}" data-f="in2" value="${rec.in2 || ''}"></div>
+      <div class="d-out"><span class="lbl">Tan ca</span><input class="tinp" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="--:--" aria-label="Tan ca ngày ${d}" data-k="${k}" data-f="out" value="${rec.out || ''}"></div>
+      <div class="d-calc">${calc}</div>
+    </div>`;
+  }
+
+  const alRows = S.allowances.map(a => `<div class="al">
+      <input value="${esc(a.name)}" data-al="${a.id}" data-f="name" aria-label="Tên phụ cấp">
+      <input type="number" min="0" step="1000" value="${a.amount}" data-al="${a.id}" data-f="amount" aria-label="Số tiền phụ cấp">
+      <select data-al="${a.id}" data-f="mode" aria-label="Cách tính phụ cấp">
+        <option value="day" ${a.mode === 'day' ? 'selected' : ''}>Mỗi ngày đi làm</option>
+        <option value="month" ${a.mode === 'month' ? 'selected' : ''}>Cố định tháng</option></select>
+      <button data-aldel="${a.id}" aria-label="Xóa phụ cấp">✕</button></div>`).join('');
+
+  // lịch rút gọn: thứ Hai đứng đầu tuần
+  let cal = '', nFull = 0, nHalf = 0, nLeave = 0;
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7;
+  for (let i = 0; i < lead; i++) cal += '<span class="c blank"></span>';
+  for (let d = 1; d <= n; d++) {
+    const k = keyOf(y, m, d), rec = state.days[k], r = (rec && (rec.in || rec.in2 || rec.out)) ? calcDay(y, m, d) : null;
+    const type = (rec && rec.type) || defType(y, m, d);
+    const past = new Date(y, m, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let cls = '', lbl = '';
+    if (r && r.worked > 0) {
+      const counts = type === 'normal' || type === 'half';
+      const isFull = type === 'half' ? r.reg >= 0.75 * S.halfHours * 60 : type === 'normal' ? r.reg >= 0.75 * S.stdHours * 60 : r.worked >= 0.75 * S.stdHours * 60;
+      if (isFull) { cls = 'full'; lbl = 'Đủ'; if (counts) nFull++; }
+      else { cls = 'half'; lbl = '1 buổi'; if (counts) nHalf++; }
+      if (type === 'half' && r.reg === 0) lbl = 'Chiều TC';
+      if (type === 'off') lbl = 'Nghỉ tuần';
+    } else if (r && r.unpaid) { cls = 'leave'; lbl = 'Nghỉ KL'; nLeave++; }
+    else if (r && r.noOt) { cls = type === 'holiday' ? 'hol' : 'rest'; lbl = type === 'holiday' ? 'Lễ' : 'Không TC'; }
+    else if (r) { cls = 'warn'; lbl = r.suspect ? 'Kiểm tra' : 'Thiếu giờ'; }
+    else if (type === 'holiday') { cls = 'hol'; lbl = 'Lễ'; }
+    else if (type === 'off') { cls = 'rest'; lbl = 'Nghỉ tuần'; }
+    else if (past) { cls = 'leave'; lbl = 'Nghỉ'; nLeave++; }
+    if (type === 'holiday' && r && r.worked > 0) lbl = 'Lễ';
+    cal += `<button class="c ${cls} ${lateInfo(y, m, d) ? 'late' : ''} ${r && r.ot > 0 ? 'ot' : ''} ${k === todayKey ? 'now' : ''}" data-goto="${k}" aria-label="Ngày ${d}: ${lbl || 'chưa có dữ liệu'}">${d}<small>${lbl}</small></button>`;
+  }
+  const calHtml = `<section class="cal" aria-label="Lịch tháng">
+      <div class="cal-g">${['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(x => `<span class="cal-h">${x}</span>`).join('')}${cal}</div>
+      <div class="cal-sum"><span>Đủ ngày <b>${nFull}</b></span><span>1 buổi <b>${nHalf}</b></span><span>Nghỉ <b>${nLeave}</b></span><span>Chấm vàng = có tăng ca, chấm đỏ = đi muộn (khi bật theo dõi) · bấm vào ngày để xem hoặc sửa giờ</span></div>
+    </section>`;
+
+  // thông báo đi muộn (chỉ khi đã bật theo dõi trong Cài đặt)
+  let lateCard = '';
+  if (S.lateMode !== 'off' && T.lateDays.length) {
+    const n = T.lateDays.length;
+    const items = T.lateDays.map(x => {
+      const rc = state.days[keyOf(y, m, x.d)] || {};
+      const parts = [];
+      if (x.li.m) parts.push(`vào sáng ${rc.in}, muộn ${x.li.m} phút`);
+      if (x.li.a) parts.push(`vào chiều ${rc.in2}, quá ${S.graceUntil}`);
+      const eff = (S.lateMode === 'apply' && S.lateRule1) ? ` → tính nghỉ không lương ${S.lateScope === 'day' ? 'cả ngày' : 'buổi đó'}` : '';
+      return `<li>${pad(x.d)}/${pad(m + 1)}: ${parts.join('; ')}${eff}</li>`;
+    }).join('');
+    let note = '';
+    if (S.lateMode === 'apply' && S.lateRule2 && S.lateN > 0) {
+      const left = S.lateN - (n % S.lateN);
+      note = T.penalty > 0
+        ? `Đã đi muộn ${n} ngày trong tháng, bị phạt ${money(T.penalty)}.`
+        : '';
+      if (n % S.lateN !== 0 || T.penalty === 0) note += ` Còn ${left} ngày đi muộn nữa sẽ bị phạt ${money(S.lateFine)}.`;
+    }
+    lateCard = `<section class="savewarn" role="alert"><b>Thông báo: đi muộn ${n} ngày trong tháng ${m + 1}</b><ul style="margin:6px 0 4px;padding-left:18px">${items}</ul>${note ? `<div>${note.trim()}</div>` : ''}</section>`;
+  }
+  const noPay = S.payMode === 'month' ? !(S.salary > 0) : !(S.hourRate > 0);
+  document.getElementById('app').innerHTML = `
+    ${lateCard}
+    ${noPay ? '<div class="savewarn" role="alert">Chưa nhập lương cơ bản cho chức danh này nên tiền lương đang là 0. Vào Cài đặt → Cách tính lương để nhập.</div>' : ''}
+    <div class="savewarn" id="savewarn" role="status" hidden>Máy này chưa lưu được dữ liệu, nên đóng app là mất. Vào Cài đặt → Sao lưu dữ liệu để sao chép lại trước khi thoát.</div>
+    <section class="total" aria-live="polite">
+      <small>Tổng nhận tháng ${m + 1}</small>
+      <div class="big">${money(T.total)}</div>
+      <div class="split">
+        <div><span>Lương giờ thường</span><strong>${money(T.regPay)}</strong></div>
+        <div><span>Tăng ca</span><strong>${money(T.otPay)}</strong></div>
+        <div><span>Phụ cấp</span><strong>${money(T.allow + T.extra)}</strong></div>
+        <div><span>Tổng giờ làm</span><strong>${fmtH(T.regMin + T.otMin)}</strong></div>
+      </div>
+      <div class="stats"><span>${T.cong}/${T.std} ngày công</span>${T.holidayDays ? `<span>${T.holidayDays} ngày lễ nghỉ${S.holidayPaid ? ' hưởng lương' : ''}${S.holidayAllow ? '' : ', không tính phụ cấp'}</span>` : ''}<span>${fmtH(T.regMin)} giờ thường</span><span>${fmtH(T.otMin)} tăng ca</span><span>Lương giờ: ${money(hourly(y, m))}</span>${S.lateMode !== 'off' && T.lateDays.length ? `<span>${T.lateDays.length} ngày đi muộn${T.penalty ? `, phạt ${money(T.penalty)}` : ''}</span>` : ''}</div>
+    </section>
+
+    <section class="today">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="info">${(tr.in || tr.in2 || tr.out) ? `Hôm nay: sáng <b>${tr.in || '--:--'}</b> · chiều <b>${tr.in2 || '--:--'}</b> · tan ca <b>${tr.out || '--:--'}</b>` : 'Hôm nay chưa chấm công'}</div>
+      <div class="btns">
+        <button class="btn" id="pin">Vào sáng</button>
+        <button class="btn" id="pin2">Vào chiều</button>
+        <button class="btn alt" id="pout" ${(tr.in || tr.in2) ? '' : 'disabled'}>Tan ca</button>
+      </div>
+    </section>
+
+    ${calHtml}
+
+    <details id="daylist" ${daysOpen ? 'open' : ''}>
+      <summary>Chi tiết từng ngày · nhập hoặc sửa giờ</summary>
+      <div style="padding:0 10px 6px">
+    <div class="legend">
+      <span><i class="dot" style="background:var(--teal)"></i>Ngày thường</span>
+      ${S.halfDays.length ? `<span><i class="dot" style="background:var(--teal-l);border:1px solid var(--teal)"></i>${S.halfDays.map(i => WD[i]).join(', ')}: sáng thường, chiều TC ×${S.otHalf}%</span>` : ''}
+      <span><i class="dot" style="background:var(--blue)"></i>Nghỉ tuần (×${S.otOff}%)</span>
+      <span><i class="dot" style="background:var(--rose)"></i>Ngày lễ (×${S.otHoliday}%)</span>
+      <span>TC = tăng ca</span>
+      <span>Gõ số cho nhanh: 0830 hoặc 830 → 08:30</span>
+    </div>
+    ${rows}
+      </div>
+    </details>
+
+    <details id="settings" ${settingsOpen ? 'open' : ''}>
+      <summary>Cài đặt lương, tăng ca, phụ cấp</summary>
+      <div class="set">
+        <h3>Chức danh</h3>
+        <div class="grid" style="margin-bottom:10px">
+          <label>Chức danh của bạn<select data-pos="1">
+            <option value="">Chưa chọn</option>
+            ${POSITIONS.map(p => `<option value="${p.id}" ${S.position === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+          </select></label>
+          <label style="align-self:end;color:var(--ink)"><input type="checkbox" data-factory="1" ${S.factory ? 'checked' : ''} style="width:auto;min-height:0;margin-right:6px">Làm việc tại xưởng sản xuất (có tăng ca và phụ cấp xăng xe)</label>
+        </div>
+        <h3>Cách tính lương</h3>
+        <div class="grid">
+          <label>Hình thức<select data-s="payMode"><option value="month" ${S.payMode === 'month' ? 'selected' : ''}>Lương tháng</option><option value="hour" ${S.payMode === 'hour' ? 'selected' : ''}>Lương theo giờ</option></select></label>
+          ${S.payMode === 'month'
+            ? `<label>Lương cơ bản của chức danh này (₫/tháng)<input type="number" min="0" step="100000" data-s="salary" value="${S.salary || ''}" placeholder="Nhập lương"></label>`
+            : `<label>Lương 1 giờ (₫)<input type="number" min="0" step="1000" data-s="hourRate" value="${S.hourRate}"></label>`}
+          <label>Công chuẩn tháng ${m + 1}/${y} (để trống = tự đếm ${stdOf(y, m)})<input type="number" min="1" max="31" step="0.5" data-stdm="${y}-${pad(m + 1)}" value="${(S.stdMonth && S.stdMonth[`${y}-${pad(m + 1)}`]) || ''}" placeholder="${stdOf(y, m)}"></label>
+          <label>Giờ làm chuẩn / ngày<input type="number" min="1" max="24" step="0.5" data-s="stdHours" value="${S.stdHours}"></label>
+          <label>Bắt đầu nghỉ trưa lúc<input type="time" data-s="lunchStart" value="${S.lunchStart}"></label>
+          <label>Giờ thường buổi sáng ngày làm nửa ngày<input type="number" min="1" max="8" step="0.5" data-s="halfHours" value="${S.halfHours}"></label>
+          <label>Hết nghỉ trưa lúc<input type="time" data-s="lunchEnd" value="${S.lunchEnd}"></label>
+          <label>Được chấm vào chiều đến<input type="time" data-s="graceUntil" value="${S.graceUntil}"></label>
+          <label>Giờ vào ca (đi sớm không tính thêm)<input type="time" data-s="shiftStart" value="${S.shiftStart}"></label>
+          <label>Hết ca (sau mốc này là tăng ca)<input type="time" data-s="shiftEnd" value="${S.shiftEnd}"></label>
+        </div>
+        <p class="hint">Giờ làm: vào ca 8:00, nghỉ trưa 12:00–13:30, hết ca 17:30. Đi sớm hơn giờ vào ca không tính thêm. Chấm "Vào chiều" trước 14:00 vẫn tính từ 13:30, sau 14:00 tính giờ thực tế. Tăng ca chỉ tính cho nhân viên xưởng và chỉ tính sau giờ hết ca; nhân viên văn phòng không tính tăng ca.</p>
+        <h3>Hệ số tăng ca (%)</h3>
+        <div class="grid">
+          <label>Ngày thường<input type="number" min="100" data-s="otNormal" value="${S.otNormal}"></label>
+          <label>Ngày nghỉ tuần<input type="number" min="100" data-s="otOff" value="${S.otOff}"></label>
+          <label>Ngày lễ<input type="number" min="100" data-s="otHoliday" value="${S.otHoliday}"></label>
+          <label>Chiều ngày làm nửa ngày (T7)<input type="number" min="100" data-s="otHalf" value="${S.otHalf}"></label>
+        </div>
+        <p class="hint">Theo quy định công ty: 150% ngày thường, 200% ngày nghỉ tuần, ngày lễ và buổi chiều thứ Bảy. Bạn có thể đổi lại ở đây.</p>
+        <h3>Quy định đi muộn (mới áp dụng, có thể thay đổi)</h3>
+        <div class="grid">
+          <label>Theo dõi đi muộn<select data-s="lateMode">
+            <option value="off" ${S.lateMode === 'off' ? 'selected' : ''}>Bỏ qua (chưa áp dụng)</option>
+            <option value="notice" ${S.lateMode === 'notice' ? 'selected' : ''}>Chỉ thông báo, không trừ gì</option>
+            <option value="apply" ${S.lateMode === 'apply' ? 'selected' : ''}>Áp dụng quy định bên dưới</option></select></label>
+          ${S.lateMode !== 'off' ? `<label>Vào sáng muộn quá (phút)<input type="number" min="0" step="1" data-s="lateMin" value="${S.lateMin}"></label>` : ''}
+        </div>
+        ${S.lateMode === 'apply' ? `
+        <div class="grid" style="margin-top:8px">
+          <label style="color:var(--ink)"><input type="checkbox" data-chk="lateRule1" ${S.lateRule1 ? 'checked' : ''} style="width:auto;min-height:0;margin-right:6px">Đi muộn thì tính nghỉ không lương</label>
+          <label>Phạm vi<select data-s="lateScope"><option value="session" ${S.lateScope === 'session' ? 'selected' : ''}>Chỉ buổi bị muộn</option><option value="day" ${S.lateScope === 'day' ? 'selected' : ''}>Cả ngày</option></select></label>
+        </div>
+        <div class="grid" style="margin-top:8px">
+          <label style="color:var(--ink)"><input type="checkbox" data-chk="lateRule2" ${S.lateRule2 ? 'checked' : ''} style="width:auto;min-height:0;margin-right:6px">Đi muộn nhiều ngày thì bị phạt tiền</label>
+          <label>Cứ mỗi (ngày đi muộn)<input type="number" min="1" step="1" data-s="lateN" value="${S.lateN}"></label>
+          <label>Phạt (₫)<input type="number" min="0" step="10000" data-s="lateFine" value="${S.lateFine}"></label>
+        </div>` : ''}
+        <p class="hint">Đi muộn gồm: vào sáng quá ${S.lateMin} phút sau ${S.shiftStart}, hoặc vào chiều sau ${S.graceUntil} (chỉ ngày thường). App sẽ hiện thông báo ở đầu trang và đánh dấu chấm đỏ trên lịch. Mỗi khi chấm giờ vào mà bị muộn, app cũng nhắc ngay. Để "Bỏ qua" thì không tính hay báo gì cả.</p>
+        <h3>Ngày lễ</h3>
+        <div class="grid">
+          <label>Nghỉ lễ (không đi làm) có tính lương<select data-s="holidayPaid">
+            <option value="1" ${S.holidayPaid ? 'selected' : ''}>Có, hưởng lương 1 ngày</option>
+            <option value="0" ${!S.holidayPaid ? 'selected' : ''}>Không</option></select></label>
+          <label>Nghỉ lễ có tính phụ cấp (ăn trưa, trách nhiệm, xăng xe)<select data-s="holidayAllow">
+            <option value="0" ${!S.holidayAllow ? 'selected' : ''}>Không, bị trừ phụ cấp ngày đó</option>
+            <option value="1" ${S.holidayAllow ? 'selected' : ''}>Có, vẫn tính phụ cấp</option></select></label>
+        </div>
+        <p class="hint">Áp dụng cho ngày bạn đặt loại ngày là "Ngày lễ" mà không chấm giờ. Theo thông tin hiện tại: nghỉ lễ có lương nhưng không tính phụ cấp. Ngày lễ đi làm tính 1 công (có phụ cấp) và giờ làm ×${S.otHoliday}%. Đổi lúc nào cũng được, tiền tự tính lại.</p>
+        <h3>Ngày làm nửa ngày</h3>
+        <div class="days-off">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label><input type="checkbox" data-half="${i}" ${S.halfDays.includes(i) ? 'checked' : ''}>${WD[i]}</label>`).join('')}</div>
+        <p class="hint" style="margin:6px 0 12px">Ngày làm nửa ngày chỉ tính buổi sáng là giờ thường (0,5 công); làm thêm buổi chiều tính tăng ca theo hệ số ở mục Hệ số tăng ca. Công chuẩn mỗi tháng tự đếm theo lịch: số ngày T2–T6 cộng 0,5 công mỗi thứ Bảy. Lương giờ = lương cơ bản ÷ (công chuẩn tháng × giờ chuẩn). Nếu công ty tính khác (ví dụ trừ ngày lễ), nhập công chuẩn của tháng đó ở ô bên trên.</p>
+        <h3>Ngày nghỉ hằng tuần</h3>
+        <div class="days-off">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label><input type="checkbox" data-off="${i}" ${S.offDays.includes(i) ? 'checked' : ''}>${WD[i]}</label>`).join('')}</div>
+        <h3>Phụ cấp</h3>
+        <p class="hint" style="margin:0 0 10px">Mỗi chức danh có một mức lương riêng, nhập một lần là app nhớ. Chọn chức danh cũng tự điền phụ cấp trách nhiệm và tiền ăn trưa (600.000 ₫/tháng). Tick "xưởng sản xuất" để thêm phụ cấp xăng xe 1.200.000 ₫/tháng. Các khoản "Cố định tháng" bị trừ theo ngày nghỉ (kể cả nghỉ phép): nhận = số tiền × ngày công thực tế ÷ ngày công chuẩn. Bạn vẫn sửa được bên dưới.</p>
+        ${alRows}
+        <button class="btn ghost" id="addal">+ Thêm phụ cấp</button>
+        <h3>Sao lưu dữ liệu</h3>
+        <p class="hint" style="margin:0 0 8px">Bấm "Sao chép dữ liệu", rồi dán vào Ghi chú để giữ. Khi cần, dán lại vào ô dưới và bấm "Khôi phục".</p>
+        <textarea id="bk" aria-label="Dữ liệu sao lưu" placeholder="Dán dữ liệu sao lưu vào đây"></textarea>
+        <div class="foot" style="margin-top:8px">
+          <button class="btn ghost" id="bkcopy">Sao chép dữ liệu</button>
+          <button class="btn ghost" id="bkrestore">Khôi phục từ ô trên</button>
+        </div>
+        <div class="foot">
+          <button class="btn ghost" id="csv">Xuất CSV tháng này</button>
+        </div>
+      </div>
+    </details>`;
+  tick();
+  updateStatus();
+}
+
+function tick() {
+  const el = document.getElementById('clock'); if (!el) return;
+  const n = new Date(); el.textContent = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+}
+setInterval(tick, 1000);
+
+/* ---------- sự kiện ---------- */
+const app = document.getElementById('app');
+function nowHM() { const n = new Date(); return `${pad(n.getHours())}:${pad(n.getMinutes())}`; }
+function punch(which) {
+  const n = new Date(), k = keyOf(n.getFullYear(), n.getMonth(), n.getDate());
+  view = new Date(n.getFullYear(), n.getMonth(), 1);
+  state.days[k] = state.days[k] || {};
+  state.days[k][which] = nowHM();
+  save(); render();
+  const li = (which === 'in' || which === 'in2') ? lateInfo(n.getFullYear(), n.getMonth(), n.getDate()) : null;
+  if (li) {
+    const eff = (state.s.lateMode === 'apply' && state.s.lateRule1) ? ` Sẽ tính nghỉ không lương ${state.s.lateScope === 'day' ? 'cả ngày' : 'buổi này'}.` : '';
+    toast(`Bạn đi muộn${li.m ? ' ' + li.m + ' phút' : ''}${li.a ? ' (vào chiều sau ' + state.s.graceUntil + ')' : ''}.${eff}`, 5000);
+  } else toast({ in: 'Đã chấm vào sáng', in2: 'Đã chấm vào chiều', out: 'Đã chấm tan ca' }[which]);
+}
+
+app.addEventListener('click', e => {
+  const t = e.target;
+  const g = t.closest && t.closest('[data-goto]');
+  if (g) {
+    daysOpen = true; render();
+    const el = document.getElementById('row-' + g.dataset.goto);
+    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); }
+    return;
+  }
+  if (t.id === 'pin') punch('in');
+  else if (t.id === 'pin2') punch('in2');
+  else if (t.id === 'pout') punch('out');
+  else if (t.dataset.clear) {
+    const k = t.dataset.clear;   // chạm 2 lần mới xóa, tránh bấm nhầm
+    if (armedDel === k) { armedDel = null; delete state.days[k]; save(); render(); }
+    else {
+      armedDel = k; const old = t.textContent; t.textContent = 'Chạm lần nữa để xóa';
+      setTimeout(() => { if (armedDel === k) { armedDel = null; t.textContent = old; } }, 3000);
+    }
+  }
+  else if (t.id === 'addal') { state.s.allowances.push({ id: Date.now(), name: 'Phụ cấp mới', amount: 0, mode: 'day' }); settingsOpen = true; save(); render(); }
+  else if (t.dataset.aldel) { state.s.allowances = state.s.allowances.filter(a => a.id != t.dataset.aldel); save(); render(); }
+  else if (t.id === 'csv') exportCsv();
+  else if (t.id === 'bkcopy') backupCopy();
+  else if (t.id === 'bkrestore') backupRestore();
+});
+app.addEventListener('toggle', e => { if (e.target.id === 'settings') settingsOpen = e.target.open; if (e.target.id === 'daylist') daysOpen = e.target.open; }, true);
+app.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.k) {
+    const isTime = t.classList && t.classList.contains('tinp');
+    let val = t.value;
+    if (isTime) {
+      val = parseTime(t.value);
+      if (val === null) { // gõ sai thì trả về giờ cũ
+        toast('Giờ chưa đúng, hãy gõ ví dụ 0830');
+        t.value = (state.days[t.dataset.k] || {})[t.dataset.f] || '';
+        return;
+      }
+      t.value = val;
+    }
+    const rec = state.days[t.dataset.k] = state.days[t.dataset.k] || {};
+    if (val) rec[t.dataset.f] = val; else delete rec[t.dataset.f];
+    if (!rec.in && !rec.in2 && !rec.out && !rec.type) delete state.days[t.dataset.k];
+    // Ô giờ: chỉ lưu ngay, còn tính lại số liệu thì chờ đến khi rời khỏi ô giờ (để không làm mất bàn phím khi đang gõ).
+    if (isTime) { save(); pending = true; return; }
+  } else if (t.dataset.pos) {
+    state.s.position = t.value; state.s.salary = state.s.salaries[t.value] || 0; applyPosition(); settingsOpen = true;
+  } else if (t.dataset.factory) {
+    state.s.factory = t.checked; applyPosition(); settingsOpen = true;
+  } else if (t.dataset.s) {
+    const f = t.dataset.s; state.s[f] = ['payMode', 'lunchStart', 'lunchEnd', 'graceUntil', 'shiftStart', 'shiftEnd', 'lateMode', 'lateScope'].includes(f) ? (t.value || DEFAULTS[f]) : Number(t.value);
+    if (f === 'lateMode') settingsOpen = true;
+    if (f === 'salary') state.s.salaries[state.s.position || ''] = state.s.salary;
+  } else if (t.dataset.off !== undefined) {
+    const i = Number(t.dataset.off), set = new Set(state.s.offDays);
+    t.checked ? set.add(i) : set.delete(i); state.s.offDays = [...set];
+  } else if (t.dataset.chk) {
+    state.s[t.dataset.chk] = t.checked; settingsOpen = true;
+  } else if (t.dataset.stdm) {
+    if (t.value) state.s.stdMonth[t.dataset.stdm] = Number(t.value); else delete state.s.stdMonth[t.dataset.stdm];
+  } else if (t.dataset.half !== undefined) {
+    const i = Number(t.dataset.half), set = new Set(state.s.halfDays);
+    t.checked ? set.add(i) : set.delete(i); state.s.halfDays = [...set];
+  } else if (t.dataset.al) {
+    const a = state.s.allowances.find(x => x.id == t.dataset.al);
+    if (a) a[t.dataset.f] = t.dataset.f === 'amount' ? Number(t.value) : t.value;
+  } else return;
+  save(); render();
+});
+
+// Gõ đủ 4 số thì tự nhảy sang ô giờ kế tiếp trong cùng ngày; ô cuối thì đóng bàn phím
+app.addEventListener('input', e => {
+  const t = e.target;
+  if (!t.classList || !t.classList.contains('tinp')) return;
+  if (t.value.replace(/\D/g, '').length < 4) return;
+  const row = t.closest('.day'), all = row ? [...row.querySelectorAll('.tinp')] : [], i = all.indexOf(t);
+  if (all[i + 1]) all[i + 1].focus(); else t.blur();
+});
+app.addEventListener('focusin', e => {
+  const t = e.target;
+  if (t.classList && t.classList.contains('tinp')) setTimeout(() => { try { t.select(); } catch (x) { /* bỏ qua */ } }, 0);
+});
+app.addEventListener('focusout', () => {
+  if (!pending) return;
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (a && a.classList && a.classList.contains('tinp')) return;      // đang chuyển sang ô giờ khác: đợi tiếp
+    if (pending) { pending = false; render(); }
+  }, 250);
+});
+
+document.getElementById('prev').onclick = () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); render(); };
+document.getElementById('next').onclick = () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); render(); };
+
+function exportCsv() {
+  const y = view.getFullYear(), m = view.getMonth(), n = new Date(y, m + 1, 0).getDate();
+  const out = ['Ngày,Thứ,Loại ngày,Vào sáng,Vào chiều,Tan ca,Giờ làm,Giờ tăng ca,Lương thường,Tiền tăng ca,Phụ cấp,Tổng'];
+  const tn = { normal: 'Ngày thường', off: 'Nghỉ tuần', holiday: 'Ngày lễ', half: 'Nửa ngày' };
+  for (let d = 1; d <= n; d++) {
+    const rec = state.days[keyOf(y, m, d)], r = calcDay(y, m, d);
+    if (!rec || !r) continue;
+    out.push([`${pad(d)}/${pad(m + 1)}/${y}`, WD[new Date(y, m, d).getDay()], tn[r.type], rec.in || '', rec.in2 || '', rec.out || '', (r.worked / 60).toFixed(2), (r.ot / 60).toFixed(2), Math.round(r.regPay), Math.round(r.otPay), Math.round(r.allow + r.extra), Math.round(r.total)].join(','));
+  }
+  const T = calcMonth();
+  out.push(`Tổng,,,,,,${(T.regMin + T.otMin) / 60},${(T.otMin / 60).toFixed(2)},${Math.round(T.regPay)},${Math.round(T.otPay)},${Math.round(T.allow + T.extra)},${Math.round(T.total)}`);
+  const blob = new Blob(['\ufeff' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `cham-cong-${y}-${pad(m + 1)}.csv`; a.click();
+}
+
+load().then(render);
+// Cài như ứng dụng: chạy được cả khi mất mạng. Trong khung xem của Claude thì bước này tự bỏ qua.
+try { if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) { /* bỏ qua */ }
+</script>
+</body>
+</html>
