@@ -322,7 +322,12 @@ function calcDay(y, m, d) {
   // Ngày không chấm "Vào chiều": coi như quay lại đúng giờ sau nghỉ trưa.
   let morning = null, afternoon = null;
   if (a !== null) { const st = clock ? Math.max(a, S0) : a; morning = [st, Math.max(st, Math.min(b, L))]; }
-  if (c0 !== null) afternoon = [(type === 'normal' && c0 > G) ? c0 : Math.max(c0, R), b];
+  if (c0 !== null) {
+    // Ngày thường: chấm "Vào chiều" từ hết nghỉ trưa (13:30) đến mốc cho phép (14:00) vẫn tính từ 13:30; sau mốc đó mới tính giờ thực tế.
+    // Các loại ngày khác: không có mốc cho phép, tính từ giờ chấm nhưng không sớm hơn giờ hết nghỉ trưa.
+    const c = type === 'normal' ? (c0 > G ? c0 : R) : Math.max(c0, R);
+    afternoon = [c, b];
+  }
   else if (a !== null && b > R) afternoon = [Math.max(R, morning[0]), b];
   // nhân viên không tính tăng ca: cắt phần sau giờ hết ca; làm ngày nghỉ tuần/ngày lễ/chiều thứ Bảy không tính
   if (!otOn) {
