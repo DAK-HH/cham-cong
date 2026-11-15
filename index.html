@@ -147,7 +147,8 @@ const DEFAULTS = {
   salaries: { nvsx: 11030000 },  // lương cơ bản theo từng chức danh
   hourRate: 35000,         // lương giờ
   stdHours: 8, halfHours: 4,
-  stdMonth: {},            // công chuẩn nhập tay theo tháng, ví dụ {'2026-10': 24}; trống = tự đếm
+  payDays: 24,             // công chuẩn cố định để tính lương, tăng ca và xăng xe (theo phiếu lương công ty)
+  stdMonth: {},            // công chuẩn thật của tháng (chia phụ cấp trách nhiệm, ăn trưa), nhập tay theo tháng; trống = tự đếm
   lunchStart: '12:00',     // giờ bắt đầu nghỉ trưa (buổi sáng tính đến mốc này)
   lunchEnd: '13:30',       // hết nghỉ trưa: buổi chiều tính từ mốc này
   graceUntil: '14:00',     // được chấm "Vào chiều" đến giờ này; sau mốc này là trễ
@@ -187,7 +188,7 @@ function applyPosition() {
     auto.push({ id: 'auto-resp', name: 'Phụ cấp trách nhiệm', amount: p.resp, mode: 'month' });
     auto.push({ id: 'auto-lunch', name: 'Tiền ăn trưa', amount: LUNCH, mode: 'month' });
   }
-  if (S.factory) auto.push({ id: 'auto-fuel', name: 'Phụ cấp xăng xe', amount: FUEL, mode: 'month' });
+  if (S.factory) auto.push({ id: 'auto-fuel', name: 'Phụ cấp xăng xe', amount: FUEL, mode: 'pay' });
   S.allowances = [...auto, ...S.allowances];
 }
 let state = { v: 2, s: structuredClone(DEFAULTS), days: {} };
@@ -208,6 +209,7 @@ function adopt(raw) {
   }
   if (!o.s.salaries) { state.s.salaries = {}; if (state.s.position) state.s.salaries[state.s.position] = state.s.salary; }
   if (state.s.otHoliday === 300) state.s.otHoliday = 200; // công ty tính lễ ×200%
+  state.s.allowances.forEach(a => { if (a.id === 'auto-fuel' && a.mode === 'month') a.mode = 'pay'; }); // xăng xe chia 24 công cố định
   if (o.s.holidayAllow === undefined) { state.s.holidayPaid = 1; state.s.holidayAllow = 0; } // nghỉ lễ: có lương, không phụ cấp
 }
 async function load() {
@@ -261,7 +263,7 @@ const money = n => Math.round(n).toLocaleString('vi-VN') + ' ₫';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hourly = (y, m) => state.s.payMode === 'hour'
   ? state.s.hourRate
-  : state.s.salary / (stdOf(y, m) * state.s.stdHours);
+  : state.s.salary / (state.s.payDays * state.s.stdHours);   // lương cơ bản ÷ 24 ÷ 8 (theo phiếu lương)
 // công chuẩn của tháng: số ngày thường + 0,5 công cho mỗi ngày làm nửa ngày (thứ Bảy); có thể nhập tay
 function stdOf(y, m) {
   const o = Number(state.s.stdMonth && state.s.stdMonth[`${y}-${pad(m + 1)}`]);
@@ -296,12 +298,15 @@ function calcDay(y, m, d) {
   const S = state.s, rate = hourly(y, m);
   const type = rec.type || defType(y, m, d);
   const extra = Number(rec.extra) || 0;
-  const base = { type, worked: 0, reg: 0, ot: 0, regPay: 0, otPay: 0, allow: 0, extra, total: 0, partial: true };
+  const base = { type, worked: 0, reg: 0, ot: 0, regPay: 0, otPay: 0, allow: 0, extra, total: 0, partial: true, cDay: 0 };
+  // Lương theo công như phiếu lương công ty: lương cơ bản ÷ 24 × số công (1 ngày = 1 công, buổi sáng thứ Bảy = 0,5 công)
+  const dayPay = S.payMode === 'month' ? S.salary / S.payDays : S.stdHours * rate;
+  if (type === 'leave') return { ...base, regPay: dayPay, total: dayPay, leave: true, cDay: 1 };   // nghỉ phép năm: có lương, không tính phụ cấp
   // ngày lễ không có giờ tính: nghỉ lễ hưởng lương nếu công ty cho
   const holidayRes = () => {
     const paid = type === 'holiday' && !!S.holidayPaid;
-    const pay = paid ? S.stdHours * rate : 0;
-    return { ...base, regPay: pay, total: pay, holidayPaid: paid, holidayNoWork: type === 'holiday' };
+    const pay = paid ? dayPay : 0;
+    return { ...base, regPay: pay, total: pay, holidayPaid: paid, holidayNoWork: type === 'holiday', cDay: paid ? 1 : 0 };
   };
   if ((!rec.in && !rec.in2) || !rec.out) {
     const noTimes = !rec.in && !rec.in2 && !rec.out;
@@ -345,34 +350,37 @@ function calcDay(y, m, d) {
   const len = sg => sg ? Math.max(0, sg[1] - sg[0]) : 0;
   const mLen = len(morning), worked = mLen + len(afternoon);
   if (worked === 0 && dropped) return { ...base, unpaid: true, late: true, lateM, lateA, dropped };
-  let reg = 0, ot = 0, regPay = 0, otPay = 0;
+  let reg = 0, ot = 0, regPay = 0, otPay = 0, cDay = 0;
   if (type === 'half') {
     // làm nửa ngày (thứ Bảy): buổi sáng là giờ thường, buổi chiều là tăng ca
     reg = Math.min(mLen, S.halfHours * 60); ot = worked - reg;
-    regPay = reg / 60 * rate; otPay = ot / 60 * rate * S.otHalf / 100;
+    cDay = reg > 0 ? 0.5 : 0;
+    regPay = S.payMode === 'month' ? cDay * dayPay : reg / 60 * rate; otPay = ot / 60 * rate * S.otHalf / 100;
   } else if (type === 'normal') {
     // tăng ca chỉ tính sau giờ hết ca (17:30)
     const afterEnd = afternoon ? overlap(afternoon[0], afternoon[1], E, 3000) : 0;
     reg = Math.min(worked - afterEnd, S.stdHours * 60); ot = worked - reg;
-    regPay = reg / 60 * rate; otPay = ot / 60 * rate * S.otNormal / 100;
+    cDay = reg > 0 ? (reg >= 0.75 * S.stdHours * 60 ? 1 : 0.5) : 0;   // đủ từ 75% giờ chuẩn = 1 công, ít hơn = 0,5 công
+    regPay = S.payMode === 'month' ? cDay * dayPay : reg / 60 * rate; otPay = ot / 60 * rate * S.otNormal / 100;
   } else {
     ot = worked;
     otPay = worked / 60 * rate * (type === 'off' ? S.otOff : S.otHoliday) / 100;
   }
   const allow = worked > 0 ? S.allowances.filter(x => x.mode === 'day').reduce((sum, x) => sum + Number(x.amount || 0), 0) : 0;
-  return { type, worked, reg, ot, regPay, otPay, allow, extra, late: !!li, lateM, lateA, dropped, total: regPay + otPay + allow + extra };
+  return { type, worked, reg, ot, regPay, otPay, cDay, allow, extra, late: !!li, lateM, lateA, dropped, total: regPay + otPay + allow + extra };
 }
 
 function calcMonth() {
   const y = view.getFullYear(), m = view.getMonth(), n = new Date(y, m + 1, 0).getDate();
-  const t = { regPay: 0, otPay: 0, allow: 0, extra: 0, regMin: 0, otMin: 0, workDays: 0, cong: 0, holidayDays: 0, lateDays: [], penalty: 0 };
+  const t = { regPay: 0, otPay: 0, allow: 0, extra: 0, regMin: 0, otMin: 0, workDays: 0, cong: 0, congPay: 0, leaveDays: 0, holidayDays: 0, lateDays: [], penalty: 0 };
   for (let d = 1; d <= n; d++) {
     const r = calcDay(y, m, d);
     const li = lateInfo(y, m, d); if (li) t.lateDays.push({ d, li });
+    if (r && r.leave) { t.regPay += r.regPay; t.congPay += 1; t.leaveDays++; continue; }   // nghỉ phép năm: tính công lương, không tính công phụ cấp
     if (r && r.holidayNoWork && (state.s.holidayPaid || state.s.holidayAllow)) {
       // nghỉ lễ: lương và phụ cấp tính riêng. Công dùng để tính phụ cấp chỉ cộng khi công ty cho tính phụ cấp ngày lễ
       if (state.s.holidayAllow) t.cong += 1;
-      if (state.s.holidayPaid) t.regPay += r.regPay;
+      if (state.s.holidayPaid) { t.regPay += r.regPay; t.congPay += 1; }
       t.holidayDays++; continue;
     }
     if (!r || r.worked === 0) { if (r) t.extra += r.extra; continue; }
@@ -381,13 +389,16 @@ function calcMonth() {
     if (r.type === 'half') t.cong += r.reg > 0 ? 0.5 : 0;   // thứ Bảy: làm buổi sáng = 0,5 công, buổi chiều là tăng ca
     else if (r.type === 'normal') t.cong += r.reg >= 0.75 * state.s.stdHours * 60 ? 1 : 0.5;
     else if (r.type === 'holiday') t.cong += r.worked >= 0.75 * state.s.stdHours * 60 ? 1 : 0.5;
+    t.congPay += r.cDay || 0;
     t.regMin += r.reg; t.otMin += r.ot;
     t.regPay += r.regPay; t.otPay += r.otPay; t.allow += r.allow; t.extra += r.extra;
   }
   // phụ cấp tháng: trừ theo ngày nghỉ (kể cả nghỉ phép) = phụ cấp × ngày công thực tế / ngày công chuẩn
   t.std = stdOf(y, m);
   t.ratio = Math.min(1, t.cong / t.std);
-  t.monthAllow = state.s.allowances.filter(x => x.mode === 'month').reduce((s, x) => s + Number(x.amount || 0), 0) * t.ratio;
+  // trách nhiệm, ăn trưa: ÷ công chuẩn thật của tháng × công có mặt; xăng xe: ÷ 24 × công có mặt (không vượt mức cài đặt)
+  t.monthAllow = state.s.allowances.filter(x => x.mode === 'month' || x.mode === 'pay')
+    .reduce((sum, x) => sum + Number(x.amount || 0) * Math.min(1, t.cong / (x.mode === 'pay' ? state.s.payDays : t.std)), 0);
   t.allow += t.monthAllow;
   const S2 = state.s;
   if (S2.lateMode === 'apply' && S2.lateRule2 && S2.lateN > 0) t.penalty = Math.floor(t.lateDays.length / S2.lateN) * S2.lateFine;
@@ -418,6 +429,8 @@ function render() {
       calc = `<span class="late-t">Kiểm tra lại giờ</span><br><button class="x" data-clear="${k}">Xóa ngày này</button>`;
     } else if (r && r.unpaid) {
       calc = `<span class="late-t">Đi muộn${r.lateM ? ' ' + r.lateM + ' phút' : ''}${r.lateA ? ', vào chiều trễ' : ''}: tính nghỉ không lương ${r.dropped}</span><br><button class="x" data-clear="${k}">Xóa ngày này</button>`;
+    } else if (r && r.leave) {
+      calc = `<b>${money(r.total)}</b>Nghỉ phép năm: có lương, không tính phụ cấp<br><button class="x" data-clear="${k}">Xóa ngày này</button>`;
     } else if (r && r.holidayPaid) {
       calc = `<b>${money(r.total)}</b>Nghỉ lễ hưởng lương<br><button class="x" data-clear="${k}">Xóa</button>`;
     } else if (r && r.noOt) {
@@ -434,7 +447,8 @@ function render() {
         <option value="normal" ${rec.type === 'normal' ? 'selected' : ''}>Ngày thường</option>
         <option value="half" ${rec.type === 'half' ? 'selected' : ''}>Làm nửa ngày (sáng thường, chiều TC)</option>
         <option value="off" ${rec.type === 'off' ? 'selected' : ''}>Ngày nghỉ tuần</option>
-        <option value="holiday" ${rec.type === 'holiday' ? 'selected' : ''}>Ngày lễ</option></select></div>
+        <option value="holiday" ${rec.type === 'holiday' ? 'selected' : ''}>Ngày lễ</option>
+        <option value="leave" ${rec.type === 'leave' ? 'selected' : ''}>Nghỉ phép năm (có lương, không phụ cấp)</option></select></div>
       <div class="d-in"><span class="lbl">Vào sáng</span><input class="tinp" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="--:--" aria-label="Vào sáng ngày ${d}" data-k="${k}" data-f="in" value="${rec.in || ''}"></div>
       <div class="d-in2"><span class="lbl">Vào chiều</span><input class="tinp" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="--:--" aria-label="Vào chiều ngày ${d}" data-k="${k}" data-f="in2" value="${rec.in2 || ''}"></div>
       <div class="d-out"><span class="lbl">Tan ca</span><input class="tinp" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="--:--" aria-label="Tan ca ngày ${d}" data-k="${k}" data-f="out" value="${rec.out || ''}"></div>
@@ -447,7 +461,8 @@ function render() {
       <input type="number" min="0" step="1000" value="${a.amount}" data-al="${a.id}" data-f="amount" aria-label="Số tiền phụ cấp">
       <select data-al="${a.id}" data-f="mode" aria-label="Cách tính phụ cấp">
         <option value="day" ${a.mode === 'day' ? 'selected' : ''}>Mỗi ngày đi làm</option>
-        <option value="month" ${a.mode === 'month' ? 'selected' : ''}>Cố định tháng</option></select>
+        <option value="month" ${a.mode === 'month' ? 'selected' : ''}>Cố định tháng (chia công chuẩn tháng)</option>
+        <option value="pay" ${a.mode === 'pay' ? 'selected' : ''}>Cố định tháng (chia ${S.payDays} công)</option></select>
       <button data-aldel="${a.id}" aria-label="Xóa phụ cấp">✕</button></div>`).join('');
 
   // lịch rút gọn: thứ Hai đứng đầu tuần
@@ -466,9 +481,11 @@ function render() {
       else { cls = 'half'; lbl = '1 buổi'; if (counts) nHalf++; }
       if (type === 'half' && r.reg === 0) lbl = 'Chiều TC';
       if (type === 'off') lbl = 'Nghỉ tuần';
-    } else if (r && r.unpaid) { cls = 'leave'; lbl = 'Nghỉ KL'; nLeave++; }
+    } else if (r && r.leave) { cls = 'rest'; lbl = 'Phép'; }
+    else if (r && r.unpaid) { cls = 'leave'; lbl = 'Nghỉ KL'; nLeave++; }
     else if (r && r.noOt) { cls = type === 'holiday' ? 'hol' : 'rest'; lbl = type === 'holiday' ? 'Lễ' : 'Không TC'; }
     else if (r) { cls = 'warn'; lbl = r.suspect ? 'Kiểm tra' : 'Thiếu giờ'; }
+    else if (type === 'leave') { cls = 'rest'; lbl = 'Phép'; }
     else if (type === 'holiday') { cls = 'hol'; lbl = 'Lễ'; }
     else if (type === 'off') { cls = 'rest'; lbl = 'Nghỉ tuần'; }
     else if (past) { cls = 'leave'; lbl = 'Nghỉ'; nLeave++; }
@@ -511,12 +528,12 @@ function render() {
       <small>Tổng nhận tháng ${m + 1}</small>
       <div class="big">${money(T.total)}</div>
       <div class="split">
-        <div><span>Lương giờ thường</span><strong>${money(T.regPay)}</strong></div>
+        <div><span>Lương theo công</span><strong>${money(T.regPay)}</strong></div>
         <div><span>Tăng ca</span><strong>${money(T.otPay)}</strong></div>
         <div><span>Phụ cấp</span><strong>${money(T.allow + T.extra)}</strong></div>
         <div><span>Tổng giờ làm</span><strong>${fmtH(T.regMin + T.otMin)}</strong></div>
       </div>
-      <div class="stats"><span>${T.cong}/${T.std} ngày công</span>${T.holidayDays ? `<span>${T.holidayDays} ngày lễ nghỉ${S.holidayPaid ? ' hưởng lương' : ''}${S.holidayAllow ? '' : ', không tính phụ cấp'}</span>` : ''}<span>${fmtH(T.regMin)} giờ thường</span><span>${fmtH(T.otMin)} tăng ca</span><span>Lương giờ: ${money(hourly(y, m))}</span>${S.lateMode !== 'off' && T.lateDays.length ? `<span>${T.lateDays.length} ngày đi muộn${T.penalty ? `, phạt ${money(T.penalty)}` : ''}</span>` : ''}</div>
+      <div class="stats"><span>${String(T.congPay).replace('.', ',')} công tính lương (÷${S.payDays})</span><span>${String(T.cong).replace('.', ',')}/${String(T.std).replace('.', ',')} công tính phụ cấp</span>${T.leaveDays ? `<span>${T.leaveDays} ngày nghỉ phép năm</span>` : ''}${T.holidayDays ? `<span>${T.holidayDays} ngày lễ nghỉ${S.holidayPaid ? ' hưởng lương' : ''}${S.holidayAllow ? '' : ', không tính phụ cấp'}</span>` : ''}<span>${fmtH(T.regMin)} giờ thường</span><span>${fmtH(T.otMin)} tăng ca</span><span>Lương giờ tăng ca: ${money(hourly(y, m))}</span>${S.lateMode !== 'off' && T.lateDays.length ? `<span>${T.lateDays.length} ngày đi muộn${T.penalty ? `, phạt ${money(T.penalty)}` : ''}</span>` : ''}</div>
     </section>
 
     <section class="today">
@@ -563,7 +580,8 @@ function render() {
           ${S.payMode === 'month'
             ? `<label>Lương cơ bản của chức danh này (₫/tháng)<input type="number" min="0" step="100000" data-s="salary" value="${S.salary || ''}" placeholder="Nhập lương"></label>`
             : `<label>Lương 1 giờ (₫)<input type="number" min="0" step="1000" data-s="hourRate" value="${S.hourRate}"></label>`}
-          <label>Công chuẩn tháng ${m + 1}/${y} (để trống = tự đếm ${stdOf(y, m)})<input type="number" min="1" max="31" step="0.5" data-stdm="${y}-${pad(m + 1)}" value="${(S.stdMonth && S.stdMonth[`${y}-${pad(m + 1)}`]) || ''}" placeholder="${stdOf(y, m)}"></label>
+          <label>Công chuẩn tính lương, tăng ca, xăng xe (cố định)<input type="number" min="1" max="31" step="0.5" data-s="payDays" value="${S.payDays}"></label>
+          <label>Công chuẩn thật tháng ${m + 1}/${y} (chia trách nhiệm, ăn trưa; để trống = tự đếm ${stdOf(y, m)})<input type="number" min="1" max="31" step="0.5" data-stdm="${y}-${pad(m + 1)}" value="${(S.stdMonth && S.stdMonth[`${y}-${pad(m + 1)}`]) || ''}" placeholder="${stdOf(y, m)}"></label>
           <label>Giờ làm chuẩn / ngày<input type="number" min="1" max="24" step="0.5" data-s="stdHours" value="${S.stdHours}"></label>
           <label>Bắt đầu nghỉ trưa lúc<input type="time" data-s="lunchStart" value="${S.lunchStart}"></label>
           <label>Giờ thường buổi sáng ngày làm nửa ngày<input type="number" min="1" max="8" step="0.5" data-s="halfHours" value="${S.halfHours}"></label>
@@ -612,7 +630,7 @@ function render() {
         <p class="hint">Áp dụng cho ngày bạn đặt loại ngày là "Ngày lễ" mà không chấm giờ. Theo thông tin hiện tại: nghỉ lễ có lương nhưng không tính phụ cấp. Ngày lễ đi làm tính 1 công (có phụ cấp) và giờ làm ×${S.otHoliday}%. Đổi lúc nào cũng được, tiền tự tính lại.</p>
         <h3>Ngày làm nửa ngày</h3>
         <div class="days-off">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label><input type="checkbox" data-half="${i}" ${S.halfDays.includes(i) ? 'checked' : ''}>${WD[i]}</label>`).join('')}</div>
-        <p class="hint" style="margin:6px 0 12px">Ngày làm nửa ngày chỉ tính buổi sáng là giờ thường (0,5 công); làm thêm buổi chiều tính tăng ca theo hệ số ở mục Hệ số tăng ca. Công chuẩn mỗi tháng tự đếm theo lịch: số ngày T2–T6 cộng 0,5 công mỗi thứ Bảy. Lương giờ = lương cơ bản ÷ (công chuẩn tháng × giờ chuẩn). Nếu công ty tính khác (ví dụ trừ ngày lễ), nhập công chuẩn của tháng đó ở ô bên trên.</p>
+        <p class="hint" style="margin:6px 0 12px">Ngày làm nửa ngày chỉ tính buổi sáng là giờ thường (0,5 công); làm thêm buổi chiều tính tăng ca theo hệ số ở mục Hệ số tăng ca. Theo phiếu lương công ty: lương thực tế = lương cơ bản ÷ 24 × số công thực tế; tăng ca = lương cơ bản ÷ 24 ÷ 8 × giờ × hệ số. Phụ cấp trách nhiệm và ăn trưa = mức ÷ công chuẩn thật của tháng (tự đếm: ngày T2–T6 cộng 0,5 công mỗi thứ Bảy) × công có mặt; xăng xe = mức × công có mặt ÷ 24, không vượt mức cài đặt. Nghỉ phép năm tính công lương nhưng không tính công phụ cấp.</p>
         <h3>Ngày nghỉ hằng tuần</h3>
         <div class="days-off">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label><input type="checkbox" data-off="${i}" ${S.offDays.includes(i) ? 'checked' : ''}>${WD[i]}</label>`).join('')}</div>
         <h3>Phụ cấp</h3>
@@ -755,7 +773,7 @@ document.getElementById('next').onclick = () => { view = new Date(view.getFullYe
 function exportCsv() {
   const y = view.getFullYear(), m = view.getMonth(), n = new Date(y, m + 1, 0).getDate();
   const out = ['Ngày,Thứ,Loại ngày,Vào sáng,Vào chiều,Tan ca,Giờ làm,Giờ tăng ca,Lương thường,Tiền tăng ca,Phụ cấp,Tổng'];
-  const tn = { normal: 'Ngày thường', off: 'Nghỉ tuần', holiday: 'Ngày lễ', half: 'Nửa ngày' };
+  const tn = { normal: 'Ngày thường', off: 'Nghỉ tuần', holiday: 'Ngày lễ', half: 'Nửa ngày', leave: 'Nghỉ phép năm' };
   for (let d = 1; d <= n; d++) {
     const rec = state.days[keyOf(y, m, d)], r = calcDay(y, m, d);
     if (!rec || !r) continue;
